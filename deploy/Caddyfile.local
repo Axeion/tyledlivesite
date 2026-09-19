@@ -1,0 +1,31 @@
+# Local HTTPS testing without public DNS or Let's Encrypt.
+# Uses Caddy's internal CA so every on-demand certificate is signed locally;
+# the "ask" endpoint is still enforced, so unverified domains fail the TLS
+# handshake exactly as they would in production.
+#
+#   PLATFORM_DOMAIN=tyled.test APP_UPSTREAM=127.0.0.1:3000 caddy run --config deploy/Caddyfile.local --adapter caddyfile
+#
+# Trust the root at $(caddy environ | grep XDG_DATA_HOME)/caddy/pki/authorities/local/root.crt
+# (or ~/.local/share/caddy/pki/authorities/local/root.crt) and add hostnames to /etc/hosts.
+{
+	local_certs
+	on_demand_tls {
+		ask http://{$APP_UPSTREAM:127.0.0.1:3000}/api/internal/tls/ask
+		interval 10s
+		burst 20
+	}
+	auto_https disable_redirects
+	admin off
+}
+
+https:// {
+	tls {
+		on_demand
+		issuer internal
+	}
+	reverse_proxy {$APP_UPSTREAM:127.0.0.1:3000} {
+		header_up Host {host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-For {remote_host}
+	}
+}

@@ -52,7 +52,12 @@ export async function currentHost(): Promise<string> {
 /** Lodge for the current request's host, memoised per request. */
 export const getCurrentTenant = cache(async (): Promise<TenantResolution> => {
   const h = await headers();
-  return resolveTenantFromHost(h.get(TENANT_HOST_HEADER) ?? h.get("host"), h.get("x-tenant-path") ?? "/");
+  const tenantHost = h.get(TENANT_HOST_HEADER);
+  const result = await resolveTenantFromHost(tenantHost ?? h.get("host"), h.get("x-tenant-path") ?? "/");
+  if (result.kind === "none") {
+    console.warn(`[tenant] unresolved host: x-tenant-host=${tenantHost ?? "-"} host=${h.get("host") ?? "-"}`);
+  }
+  return result;
 });
 
 /** True when the lodge's public site should be served. */

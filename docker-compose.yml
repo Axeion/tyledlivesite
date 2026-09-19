@@ -1,0 +1,116 @@
+# Full stack: Caddy (TLS) -> web (Next.js) + worker, Postgres, MinIO.
+# Copy .env.example to .env and set PLATFORM_DOMAIN, secrets, Stripe keys.
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
+    volumes:
+      - ./deploy/${CADDYFILE:-Caddyfile}:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+  web:
+    build:
+      context: .
+      target: web
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tyled}:${POSTGRES_PASSWORD:-tyled}@postgres:5432/${POSTGRES_DB:-tyled}
+      S3_ENDPOINT: http://minio:9000
+      TRUST_PROXY: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-H", "Host: ${PLATFORM_DOMAIN:-localhost}", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: .
+      target: worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tyled}:${POSTGRES_PASSWORD:-tyled}@postgres:5432/${POSTGRES_DB:-tyled}
+      S3_ENDPOINT: http://minio:9000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Runs migrations (and optionally the seed) once, before web/worker start.
+  migrate:
+    build:
+      context: .
+      target: worker
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tyled}:${POSTGRES_PASSWORD:-tyled}@postgres:5432/${POSTGRES_DB:-tyled}
+      SEED_ON_MIGRATE: ${SEED_ON_MIGRATE:-0}
+    command: >
+      sh -c "npx prisma migrate deploy && if [ \"$$SEED_ON_MIGRATE\" = \"1\" ]; then npx tsx prisma/seed.ts; fi"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tyled}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tyled}
+      POSTGRES_DB: ${POSTGRES_DB:-tyled}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tyled} -d ${POSTGRES_DB:-tyled}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  # Creates the uploads bucket and makes it publicly readable (images are served directly).
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 ${S3_ACCESS_KEY:-minioadmin} ${S3_SECRET_KEY:-minioadmin}; do sleep 1; done;
+      mc mb --ignore-existing local/${S3_BUCKET:-tyled-uploads};
+      mc anonymous set download local/${S3_BUCKET:-tyled-uploads};
+      echo bucket ready"
+
+volumes:
+  pg_data:
+  minio_data:
+  caddy_data:
+  caddy_config:

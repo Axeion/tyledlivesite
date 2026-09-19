@@ -5,7 +5,7 @@ import { classifyHost, normalizeHost } from "@/lib/urls";
  * Host-based routing. Runs on every request (except static assets):
  *  - apex domain           -> marketing site, /admin, /api
  *  - {slug}.PLATFORM_DOMAIN -> /dashboard, /api pass through; everything else is
- *                              rewritten to /_sites/{host}/... (public lodge site)
+ *                              rewritten to /tenant/{host}/... (public lodge site)
  *  - custom domain         -> same as subdomain (the page resolves entitlement)
  * Tenant resolution itself (DB lookups) happens in lib/tenant.ts, not here.
  */
@@ -18,8 +18,20 @@ export function proxy(req: NextRequest) {
   requestHeaders.set("x-tenant-host", host);
   requestHeaders.set("x-tenant-path", pathname);
 
-  // Internal site routes are never addressable directly.
-  if (pathname.startsWith("/_sites")) {
+  // /tenant/{host}/... is the internal form produced by the rewrite below. The
+  // proxy can run again for the rewritten request (with an internal Host), so
+  // take the tenant host from the path here. The [host] segment only ever
+  // selects a *public* site, so a direct hit on this path is harmless.
+  if (pathname.startsWith("/tenant/")) {
+    const tenantHost = normalizeHost(pathname.split("/")[2]);
+    if (classifyHost(tenantHost).kind === "invalid") {
+      return new NextResponse("Not found", { status: 404 });
+    }
+    requestHeaders.set("x-tenant-host", tenantHost);
+    requestHeaders.set("x-tenant-path", "/" + pathname.split("/").slice(3).join("/"));
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+  if (pathname === "/tenant") {
     return new NextResponse("Not found", { status: 404 });
   }
 
@@ -48,9 +60,10 @@ export function proxy(req: NextRequest) {
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
-  const url = req.nextUrl.clone();
-  url.pathname = `/_sites/${host}${pathname === "/" ? "" : pathname}`;
-  url.search = search;
+  // Build the rewrite from req.url (not nextUrl) so the origin matches the
+  // incoming request; a mismatched origin is treated as an external rewrite in
+  // standalone mode and the header overrides above would be dropped.
+  const url = new URL(`/tenant/${host}${pathname === "/" ? "" : pathname}${search}`, req.url);
   return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
 }
 
