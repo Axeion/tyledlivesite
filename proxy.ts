@@ -23,6 +23,12 @@ export function proxy(req: NextRequest) {
     return new NextResponse("Not found", { status: 404 });
   }
 
+  // API routes (Stripe webhooks, Caddy's TLS ask endpoint, iCal feeds) do
+  // their own host handling and may be called on internal hostnames.
+  if (pathname.startsWith("/api")) {
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
   if (kind.kind === "apex") {
     if (pathname.startsWith("/dashboard")) {
       return new NextResponse("Not found", { status: 404 });
@@ -38,7 +44,7 @@ export function proxy(req: NextRequest) {
   if (pathname.startsWith("/admin") || pathname.startsWith("/signup") || pathname === "/login" || pathname === "/pricing") {
     return new NextResponse("Not found", { status: 404 });
   }
-  if (pathname.startsWith("/dashboard") || pathname.startsWith("/api")) {
+  if (pathname.startsWith("/dashboard")) {
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
 

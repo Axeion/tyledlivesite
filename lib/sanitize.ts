@@ -44,7 +44,6 @@ export function sanitizeRichText(input: string | null | undefined): string {
 export function cleanText(input: string | null | undefined, max = 500): string {
   if (!input) return "";
   const noTags = sanitizeHtml(String(input), { allowedTags: [], allowedAttributes: {} });
-  // eslint-disable-next-line no-control-regex
   const noControl = noTags.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
   return noControl.replace(/\s+/g, " ").trim().slice(0, max);
 }
@@ -53,7 +52,6 @@ export function cleanText(input: string | null | undefined, max = 500): string {
 export function cleanMultiline(input: string | null | undefined, max = 4000): string {
   if (!input) return "";
   const noTags = sanitizeHtml(String(input), { allowedTags: [], allowedAttributes: {} });
-  // eslint-disable-next-line no-control-regex
   const noControl = noTags.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
   return noControl.replace(/\r\n?/g, "\n").replace(/[ \t]+\n/g, "\n").trim().slice(0, max);
 }

@@ -1,4 +1,4 @@
-import { RRule, Weekday, type Options } from "rrule";
+import { RRule, type Options } from "rrule";
 import { fromFloating, toFloating } from "@/lib/events/timezone";
 
 /**
@@ -20,16 +20,6 @@ export const WEEKDAY_LABELS: Record<WeekdayCode, string> = {
   FR: "Friday",
   SA: "Saturday",
   SU: "Sunday",
-};
-
-const RRULE_WEEKDAYS: Record<WeekdayCode, Weekday> = {
-  MO: RRule.MO,
-  TU: RRule.TU,
-  WE: RRule.WE,
-  TH: RRule.TH,
-  FR: RRule.FR,
-  SA: RRule.SA,
-  SU: RRule.SU,
 };
 
 export type RecurrencePreset =
