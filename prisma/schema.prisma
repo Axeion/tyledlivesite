@@ -1,0 +1,268 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Platform-level models
+// ---------------------------------------------------------------------------
+
+enum PlatformRole {
+  PLATFORM_ADMIN
+}
+
+enum LodgeStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum Plan {
+  FREE
+  PAID
+}
+
+enum LodgeRole {
+  ADMIN
+  EDITOR
+}
+
+enum DomainStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  name         String
+  platformRole PlatformRole?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  sessions    Session[]
+  loginTokens LoginToken[]
+  memberships LodgeMembership[]
+  auditLogs   AuditLog[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// One-time token used to hand a freshly signed-up user from the apex domain to
+// their lodge subdomain (cookies are host-scoped).
+model LoginToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  lodgeId   String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lodge     Lodge     @relation(fields: [lodgeId], references: [id], onDelete: Cascade)
+}
+
+model Lodge {
+  id              String      @id @default(cuid())
+  slug            String      @unique
+  name            String
+  number          String
+  jurisdiction    String
+  status          LodgeStatus @default(DRAFT)
+  published       Boolean     @default(false)
+  rejectionReason String?
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+
+  plan               Plan      @default(FREE)
+  stripeCustomerId   String?   @unique
+  stripeSubscriptionId String? @unique
+  subscriptionStatus String?
+  currentPeriodEnd   DateTime?
+
+  templateId String @default("classic")
+  timezone   String @default("America/New_York")
+
+  tagline         String?
+  about           String? // sanitized HTML
+  meetingSchedule String? // free text, e.g. "Stated meetings 2nd Tuesday, 7:30 PM"
+  contactEmail    String?
+  contactPhone    String?
+  website         String?
+
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  region       String?
+  postalCode   String?
+  country      String? @default("US")
+  lat          Float?
+  lng          Float?
+  geocodedAt   DateTime?
+
+  logoKey String?
+  sealKey String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships LodgeMembership[]
+  officers    Officer[]
+  gallery     GalleryImage[]
+  pages       Page[]
+  events      Event[]
+  domains     Domain[]
+  loginTokens LoginToken[]
+  auditLogs   AuditLog[]
+}
+
+model LodgeMembership {
+  id        String    @id @default(cuid())
+  userId    String
+  lodgeId   String
+  role      LodgeRole @default(EDITOR)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lodge     Lodge     @relation(fields: [lodgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lodgeId])
+  @@index([lodgeId])
+}
+
+// ---------------------------------------------------------------------------
+// Tenant-scoped models (every one carries lodgeId; see lib/tenant-db.ts)
+// ---------------------------------------------------------------------------
+
+model Officer {
+  id        String   @id @default(cuid())
+  lodgeId   String
+  title     String
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lodge     Lodge    @relation(fields: [lodgeId], references: [id], onDelete: Cascade)
+
+  @@index([lodgeId, order])
+}
+
+model GalleryImage {
+  id        String   @id @default(cuid())
+  lodgeId   String
+  key       String
+  caption   String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  lodge     Lodge    @relation(fields: [lodgeId], references: [id], onDelete: Cascade)
+
+  @@index([lodgeId, order])
+}
+
+model Page {
+  id        String   @id @default(cuid())
+  lodgeId   String
+  slug      String
+  title     String
+  bodyHtml  String // sanitized HTML
+  order     Int      @default(0)
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lodge     Lodge    @relation(fields: [lodgeId], references: [id], onDelete: Cascade)
+
+  @@unique([lodgeId, slug])
+  @@index([lodgeId, order])
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  lodgeId     String
+  title       String
+  description String?
+  location    String?
+  startsAt    DateTime
+  endsAt      DateTime?
+  allDay      Boolean   @default(false)
+  // RFC 5545 RRULE body without the "RRULE:" prefix, e.g. FREQ=MONTHLY;BYDAY=2TU
+  rrule       String?
+  until       DateTime?
+  exdates     DateTime[] @default([])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lodge       Lodge     @relation(fields: [lodgeId], references: [id], onDelete: Cascade)
+
+  @@index([lodgeId, startsAt])
+}
+
+model Domain {
+  id                String       @id @default(cuid())
+  lodgeId           String
+  hostname          String       @unique
+  verificationToken String
+  status            DomainStatus @default(PENDING)
+  lastCheckedAt     DateTime?
+  verifiedAt        DateTime?
+  lastError         String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  lodge             Lodge        @relation(fields: [lodgeId], references: [id], onDelete: Cascade)
+
+  @@index([lodgeId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Support tables
+// ---------------------------------------------------------------------------
+
+model GeocodeCache {
+  id          String   @id @default(cuid())
+  queryHash   String   @unique
+  query       String
+  lat         Float?
+  lng         Float?
+  displayName String?
+  fetchedAt   DateTime @default(now())
+}
+
+model SignupAttempt {
+  id        String   @id @default(cuid())
+  ip        String
+  createdAt DateTime @default(now())
+
+  @@index([ip, createdAt])
+}
+
+model StripeEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  lodgeId   String?
+  action    String
+  meta      Json?
+  createdAt DateTime @default(now())
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  lodge     Lodge?   @relation(fields: [lodgeId], references: [id], onDelete: Cascade)
+
+  @@index([lodgeId, createdAt])
+}
