@@ -63,6 +63,8 @@ export const slugSchema = z
 export const RESERVED_SLUGS = new Set([
   "www", "admin", "api", "app", "mail", "smtp", "ftp", "dashboard", "static", "assets", "cdn", "help", "support",
   "billing", "status", "blog", "docs", "login", "signup", "test", "staging", "dev",
+  // Served by Caddy from MinIO, so it can never belong to a lodge.
+  "files",
 ]);
 
 export const officerSchema = z.object({

@@ -11,8 +11,6 @@
 	local_certs
 	on_demand_tls {
 		ask http://{$APP_UPSTREAM:127.0.0.1:3000}/api/internal/tls/ask
-		interval 10s
-		burst 20
 	}
 	auto_https disable_redirects
 	admin off
