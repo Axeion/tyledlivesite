@@ -6,11 +6,11 @@ export default async function MarketingLayout({ children }: { children: React.Re
   return (
     <div className="min-h-screen bg-white text-neutral-900">
       <header className="border-b border-neutral-200">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-4">
           <Link href="/" className="text-lg font-bold tracking-tight">
             Tyled<span className="text-indigo-600">.</span>Live
           </Link>
-          <nav className="flex items-center gap-5 text-sm font-medium">
+          <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-medium">
             <Link href="/pricing" className="hover:text-indigo-600">
               Pricing
             </Link>
@@ -23,8 +23,9 @@ export default async function MarketingLayout({ children }: { children: React.Re
                 Sign in
               </Link>
             )}
-            <Link href="/signup" className="btn-primary">
-              Create your lodge site
+            <Link href="/signup" className="btn-primary whitespace-nowrap">
+              <span className="sm:hidden">Get started</span>
+              <span className="hidden sm:inline">Create your lodge site</span>
             </Link>
           </nav>
         </div>
