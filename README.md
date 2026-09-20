@@ -313,7 +313,10 @@ ask refusal → re-subscribe and portal cancel; image upload acceptance and reje
    `TRUST_PROXY=1`, a strong `APP_SECRET`, `POSTGRES_PASSWORD`, `S3_SECRET_KEY`,
    `S3_PUBLIC_URL=https://tyled.live/…` *or* a public MinIO hostname (see below),
    Stripe live/test keys, `ACME_EMAIL`, and the seed passwords.
-4. **Object storage.** Browsers load images straight from `S3_PUBLIC_URL`. Either
+4. **Object storage.** MinIO images are pulled from Quay (`quay.io/minio/minio`, `quay.io/minio/mc`);
+   the old Docker Hub `minio/minio` repository no longer exists. Any S3-compatible store works
+   instead: drop the `minio` and `minio-init` services and point the `S3_*` variables at it.
+   Browsers load images straight from `S3_PUBLIC_URL`. Either
    expose MinIO behind Caddy on `files.tyled.live` (add a site block that
    `reverse_proxy minio:9000`) and set `S3_PUBLIC_URL=https://files.tyled.live/tyled-uploads`,
    or use any S3-compatible provider and drop the `minio` services.
