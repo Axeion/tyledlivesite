@@ -50,6 +50,9 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-tyled}:${POSTGRES_PASSWORD:-tyled}@postgres:5432/${POSTGRES_DB:-tyled}
       S3_ENDPOINT: http://minio:9000
+      # Pre-warm on-demand certificates against Caddy so a lodge's first real
+      # visitor never waits on ACME inside the TLS handshake.
+      CERT_WARM_TARGET: caddy:443
     depends_on:
       migrate:
         condition: service_completed_successfully

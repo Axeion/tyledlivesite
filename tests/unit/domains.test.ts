@@ -59,6 +59,26 @@ describe("verifyDomain", () => {
     expect((await verifyDomain("lodge.org", "demo-lodge", "tok", dns)).ok).toBe(true);
   });
 
+  it("requires the A record to point at us once PLATFORM_IPS is configured", async () => {
+    const previous = process.env.PLATFORM_IPS;
+    process.env.PLATFORM_IPS = "203.0.113.10, 203.0.113.11";
+    try {
+      const txt = { "_tyled-verify.lodge.org": ["tyled-verify=tok"] };
+      const ours = fakeDns({ txt, a: { "lodge.org": ["203.0.113.11"] } });
+      expect((await verifyDomain("lodge.org", "demo-lodge", "tok", ours)).ok).toBe(true);
+
+      // Points somewhere else: verified ownership, but not routed to us.
+      const elsewhere = fakeDns({ txt, a: { "lodge.org": ["198.51.100.7"] } });
+      expect(await verifyDomain("lodge.org", "demo-lodge", "tok", elsewhere)).toMatchObject({
+        ok: false,
+        txtOk: true,
+        routeOk: false,
+      });
+    } finally {
+      process.env.PLATFORM_IPS = previous;
+    }
+  });
+
   it("fails on wrong token or wrong CNAME target", async () => {
     const wrongTxt = fakeDns({ txt: { "_tyled-verify.lodge.org": ["tyled-verify=nope"] }, cname: { "lodge.org": ["demo-lodge.tyled.test"] } });
     expect(await verifyDomain("lodge.org", "demo-lodge", "tok", wrongTxt)).toMatchObject({ ok: false, txtOk: false, routeOk: true });

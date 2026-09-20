@@ -100,6 +100,23 @@ export const env = {
       return int("DOMAIN_VERIFY_INTERVAL_SECONDS", 60);
     },
   },
+  certWarm: {
+    // `host:port` of the TLS terminator to open warming handshakes against.
+    // Empty disables warming, which is the right default off the compose stack
+    // (a bare `next dev` has no Caddy in front of it).
+    get target() {
+      return process.env.CERT_WARM_TARGET ?? "";
+    },
+    get intervalSeconds() {
+      return int("CERT_WARM_INTERVAL_SECONDS", 120);
+    },
+    get maxPerPass() {
+      return int("CERT_WARM_MAX_PER_PASS", 10);
+    },
+    get timeoutMs() {
+      return int("CERT_WARM_TIMEOUT_MS", 30_000);
+    },
+  },
   signup: {
     get maxPerHour() {
       return int("SIGNUP_MAX_PER_HOUR", 5);

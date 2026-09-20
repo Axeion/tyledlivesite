@@ -30,6 +30,9 @@ export default defineConfig({
       STRIPE_WEBHOOK_SECRET: "whsec_unit_test",
       STRIPE_PRICE_ID: "price_unit",
       SIGNUP_MAX_PER_HOUR: "5",
+      // Pinned so the suite does not inherit the deployment's real value from
+      // .env; tests that need it set override process.env themselves.
+      PLATFORM_IPS: "",
     },
     fileParallelism: false,
     testTimeout: 20000,

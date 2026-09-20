@@ -2,11 +2,13 @@
  * Background worker. Runs alongside the web app (separate container in
  * docker-compose) and performs:
  *   - custom domain DNS verification (every DOMAIN_VERIFY_INTERVAL_SECONDS)
+ *   - TLS certificate pre-warming (every CERT_WARM_INTERVAL_SECONDS, when enabled)
  *   - geocoding of lodges whose address changed (every 30s)
  *   - housekeeping: expired sessions/login tokens, old signup attempts (hourly)
  */
 import "dotenv/config";
 import { db } from "../lib/db";
+import { runCertWarmPass } from "../lib/domains/prewarm";
 import { runDomainVerificationPass } from "../lib/domains/service";
 import { env } from "../lib/env";
 import { geocodeLodge } from "../lib/geocode";
@@ -72,7 +74,20 @@ function main() {
     }),
     loop("housekeeping", 60 * 60 * 1000, housekeeping),
   ];
-  console.log(`[worker] started (domain check every ${env.domains.verifyIntervalSeconds}s)`);
+  if (env.certWarm.target) {
+    timers.push(
+      loop("certwarm", env.certWarm.intervalSeconds * 1000, async () => {
+        const r = await runCertWarmPass();
+        if (r.warmed > 0 || r.failed > 0) {
+          console.log(`[worker:certwarm] pending=${r.pending} warmed=${r.warmed} failed=${r.failed}`);
+        }
+      }),
+    );
+  }
+  console.log(
+    `[worker] started (domain check every ${env.domains.verifyIntervalSeconds}s` +
+      `${env.certWarm.target ? `, cert warm every ${env.certWarm.intervalSeconds}s via ${env.certWarm.target}` : ""})`,
+  );
   const stop = () => {
     timers.forEach(clearInterval);
     db.$disconnect().finally(() => process.exit(0));
