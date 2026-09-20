@@ -22,6 +22,11 @@ https:// {
 		on_demand
 	}
 	encode zstd gzip
+
+	# Internal endpoints (the on-demand TLS "ask" check) are only for Caddy itself.
+	@internal path /api/internal/*
+	respond @internal 404
+
 	reverse_proxy web:3000 {
 		header_up Host {host}
 		header_up X-Forwarded-Proto {scheme}

@@ -72,7 +72,7 @@ export default function ClassicTemplate({ data, page }: TemplateProps) {
               </h1>
               {l.tagline ? <p className="mt-3 text-lg text-neutral-700">{l.tagline}</p> : null}
               {l.meetingSchedule ? (
-                <p className="mt-4 inline-block rounded border border-[#c9a227] bg-white px-4 py-2 text-sm">{l.meetingSchedule}</p>
+                <p className="mt-4 inline-block whitespace-pre-line rounded border border-[#c9a227] bg-white px-4 py-2 text-left text-sm">{l.meetingSchedule}</p>
               ) : null}
             </section>
             {l.aboutHtml ? (

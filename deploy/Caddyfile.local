@@ -23,6 +23,9 @@ https:// {
 		on_demand
 		issuer internal
 	}
+	@internal path /api/internal/*
+	respond @internal 404
+
 	reverse_proxy {$APP_UPSTREAM:127.0.0.1:3000} {
 		header_up Host {host}
 		header_up X-Forwarded-Proto {scheme}

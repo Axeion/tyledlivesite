@@ -331,6 +331,12 @@ export async function addMember(_prev: ActionResult, fd: FormData): Result {
       if (!parsed.success) return { error: "No account exists for that email yet: set a name and an initial password (10+ characters)" };
       user = await db.user.create({ data: { email, name, passwordHash: await hashPassword(parsed.data) } });
     }
+    if (role === "EDITOR") {
+      const existing = await ctx.db.lodgeMembership.findUnique({ where: { userId_lodgeId: { userId: user.id, lodgeId: ctx.lodge.id } } });
+      if (existing?.role === "ADMIN" && (await ctx.db.lodgeMembership.count({ where: { role: "ADMIN" } })) <= 1) {
+        return { error: "A lodge must keep at least one admin" };
+      }
+    }
     await ctx.db.lodgeMembership.upsert({
       where: { userId_lodgeId: { userId: user.id, lodgeId: ctx.lodge.id } },
       create: { userId: user.id, role },

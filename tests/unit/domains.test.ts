@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { DomainValidationError, dnsInstructions, normalizeHostname } from "@/lib/domains/instructions";
-import { addDomain, checkDomain, runDomainVerificationPass } from "@/lib/domains/service";
+import { DOWNGRADE_AFTER_FAILURES, addDomain, checkDomain, runDomainVerificationPass } from "@/lib/domains/service";
 import { shouldIssueCertificate } from "@/lib/domains/tls-ask";
 import { verifyDomain, type DnsLookup } from "@/lib/domains/verify";
 import { makeLodge, resetDatabase } from "./helpers";
@@ -113,13 +113,40 @@ describe("domain service and TLS ask endpoint", () => {
     expect(await shouldIssueCertificate("")).toMatchObject({ allow: false });
   });
 
-  it("marks a verified domain FAILED when its records disappear", async () => {
+  it("keeps a verified domain serving through a few failed checks, then marks it FAILED", async () => {
     const paid = await makeLodge({ plan: "PAID", subscriptionStatus: "active" });
-    const d = await db.domain.create({
+    let d = await db.domain.create({
       data: { lodgeId: paid.id, hostname: "gone.org", verificationToken: "t", status: "VERIFIED", verifiedAt: new Date() },
     });
-    const after = await checkDomain(d, fakeDns({}));
-    expect(after.status).toBe("FAILED");
-    expect(after.lastError).toMatch(/not found/);
+    for (let i = 1; i < DOWNGRADE_AFTER_FAILURES; i++) {
+      d = await checkDomain(d, fakeDns({}));
+      expect(d.status).toBe("VERIFIED");
+      expect(d.failureCount).toBe(i);
+      expect(await shouldIssueCertificate("gone.org")).toMatchObject({ allow: true });
+    }
+    d = await checkDomain(d, fakeDns({}));
+    expect(d.status).toBe("FAILED");
+    expect(d.verifiedAt).toBeNull();
+    expect(d.lastError).toMatch(/not found/);
+    expect(await shouldIssueCertificate("gone.org")).toMatchObject({ allow: false });
+  });
+
+  it("ignores resolver errors and recovers once records are back", async () => {
+    const paid = await makeLodge({ plan: "PAID", subscriptionStatus: "active", slug: "recover-lodge" });
+    let d = await db.domain.create({
+      data: { lodgeId: paid.id, hostname: "flaky.org", verificationToken: "t", status: "VERIFIED", verifiedAt: new Date(), failureCount: 2 },
+    });
+    const erroring: DnsLookup = {
+      resolveTxt: async () => { throw Object.assign(new Error("timeout"), { code: "ETIMEOUT" }); },
+      resolveCname: async () => { throw Object.assign(new Error("timeout"), { code: "ETIMEOUT" }); },
+      resolve4: async () => { throw Object.assign(new Error("timeout"), { code: "ETIMEOUT" }); },
+    };
+    d = await checkDomain(d, erroring);
+    expect(d.status).toBe("VERIFIED");
+    expect(d.failureCount).toBe(2);
+    d = await checkDomain(d, fakeDns({ txt: { "_tyled-verify.flaky.org": ["tyled-verify=t"] }, cname: { "flaky.org": ["recover-lodge.tyled.test"] } }));
+    expect(d.status).toBe("VERIFIED");
+    expect(d.failureCount).toBe(0);
+    expect(d.lastError).toBeNull();
   });
 });

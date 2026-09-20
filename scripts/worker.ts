@@ -10,7 +10,7 @@ import { db } from "../lib/db";
 import { runDomainVerificationPass } from "../lib/domains/service";
 import { env } from "../lib/env";
 import { geocodeLodge } from "../lib/geocode";
-import { pruneSignupAttempts } from "../lib/rate-limit";
+import { pruneRateLimitHits } from "../lib/rate-limit";
 
 function loop(name: string, intervalMs: number, fn: () => Promise<void>) {
   let running = false;
@@ -30,8 +30,13 @@ function loop(name: string, intervalMs: number, fn: () => Promise<void>) {
 }
 
 export async function geocodePendingLodges(): Promise<number> {
+  // Never geocoded, or a previous attempt failed (lat still null) more than an hour ago.
+  const retryBefore = new Date(Date.now() - 60 * 60 * 1000);
   const pending = await db.lodge.findMany({
-    where: { geocodedAt: null, OR: [{ addressLine1: { not: null } }, { city: { not: null } }] },
+    where: {
+      OR: [{ geocodedAt: null }, { lat: null, geocodedAt: { lt: retryBefore } }],
+      AND: [{ OR: [{ addressLine1: { not: null } }, { city: { not: null } }] }],
+    },
     select: { id: true, slug: true },
     take: 20,
   });
@@ -41,8 +46,8 @@ export async function geocodePendingLodges(): Promise<number> {
       console.log(`[worker:geocode] ${lodge.slug} -> ${r ? `${r.lat},${r.lng}` : "not found"}`);
     } catch (err) {
       console.error(`[worker:geocode] ${lodge.slug} failed:`, err);
-      // Mark as attempted so one bad address cannot block the queue forever; retried after an hour.
-      await db.lodge.update({ where: { id: lodge.id }, data: { geocodedAt: new Date(Date.now() - 23 * 3600 * 1000) } });
+      // Mark as attempted so one bad address cannot block the queue; retried after an hour.
+      await db.lodge.update({ where: { id: lodge.id }, data: { geocodedAt: new Date() } });
     }
   }
   return pending.length;
@@ -52,8 +57,8 @@ export async function housekeeping(): Promise<void> {
   const now = new Date();
   const sessions = await db.session.deleteMany({ where: { expiresAt: { lt: now } } });
   const tokens = await db.loginToken.deleteMany({ where: { OR: [{ expiresAt: { lt: now } }, { usedAt: { not: null } }] } });
-  const attempts = await pruneSignupAttempts();
-  console.log(`[worker:housekeeping] sessions=${sessions.count} tokens=${tokens.count} signupAttempts=${attempts}`);
+  const attempts = await pruneRateLimitHits();
+  console.log(`[worker:housekeeping] sessions=${sessions.count} tokens=${tokens.count} rateLimitHits=${attempts}`);
 }
 
 function main() {

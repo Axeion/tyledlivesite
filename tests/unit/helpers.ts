@@ -7,7 +7,7 @@ export async function resetDatabase(): Promise<void> {
   // Order matters only for tables without cascades; everything hangs off Lodge/User.
   await db.stripeEvent.deleteMany();
   await db.geocodeCache.deleteMany();
-  await db.signupAttempt.deleteMany();
+  await db.rateLimitHit.deleteMany();
   await db.lodge.deleteMany();
   await db.user.deleteMany();
 }

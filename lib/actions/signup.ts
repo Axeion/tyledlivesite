@@ -6,9 +6,10 @@ import { createLoginToken } from "@/lib/auth/login-token";
 import { hashPassword } from "@/lib/auth/password";
 import { db } from "@/lib/db";
 import { canUseTemplate } from "@/lib/entitlements";
+import { adminNotifyEmails, sendMail } from "@/lib/mailer";
+import { apexUrl, lodgeSubdomainUrl } from "@/lib/urls";
 import { checkSignupRateLimit, getClientIp } from "@/lib/rate-limit";
 import { signupSchema, type SignupInput } from "@/lib/signup-schema";
-import { lodgeSubdomainUrl } from "@/lib/urls";
 import { RESERVED_SLUGS, slugSchema, zodMessage } from "@/lib/validation";
 import { getTemplate } from "@/templates/registry";
 
@@ -60,6 +61,21 @@ export async function submitSignup(input: SignupInput): Promise<SignupResult> {
     await tx.auditLog.create({ data: { actorId: user.id, lodgeId: lodge.id, action: "lodge.submitted", meta: { ip } } });
     return { lodge, user };
   });
+
+  await sendMail({
+    to: user.email,
+    subject: `${lodge.name} No. ${lodge.number} submitted for review`,
+    text: `Thanks for creating a site for ${lodge.name}. The platform team will verify your lodge shortly. Until then your site shows a coming-soon page and you can keep editing at ${lodgeSubdomainUrl(lodge.slug, "/dashboard")}.`,
+  });
+  await Promise.all(
+    adminNotifyEmails().map((to) =>
+      sendMail({
+        to,
+        subject: `New lodge awaiting approval: ${lodge.name} No. ${lodge.number}`,
+        text: `${user.name} <${user.email}> submitted ${lodge.name} No. ${lodge.number} (${lodge.jurisdiction}). Review it at ${apexUrl("/admin")}.`,
+      }),
+    ),
+  );
 
   const token = await createLoginToken(user.id, lodge.id);
   return { ok: true, redirectTo: lodgeSubdomainUrl(lodge.slug, `/dashboard/auth/exchange?token=${token}`) };

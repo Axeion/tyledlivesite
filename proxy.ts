@@ -18,20 +18,11 @@ export function proxy(req: NextRequest) {
   requestHeaders.set("x-tenant-host", host);
   requestHeaders.set("x-tenant-path", pathname);
 
-  // /tenant/{host}/... is the internal form produced by the rewrite below. The
-  // proxy can run again for the rewritten request (with an internal Host), so
-  // take the tenant host from the path here. The [host] segment only ever
-  // selects a *public* site, so a direct hit on this path is harmless.
-  if (pathname.startsWith("/tenant/")) {
-    const tenantHost = normalizeHost(pathname.split("/")[2]);
-    if (classifyHost(tenantHost).kind === "invalid") {
-      return new NextResponse("Not found", { status: 404 });
-    }
-    requestHeaders.set("x-tenant-host", tenantHost);
-    requestHeaders.set("x-tenant-path", "/" + pathname.split("/").slice(3).join("/"));
-    return NextResponse.next({ request: { headers: requestHeaders } });
-  }
-  if (pathname === "/tenant") {
+  // /tenant/{host}/... is the internal form produced by the rewrite below.
+  // Rewrites are internal (see skipProxyUrlNormalize in next.config.ts) and do
+  // not re-enter the proxy, so any request that arrives here with this prefix
+  // came from a client and is refused.
+  if (pathname === "/tenant" || pathname.startsWith("/tenant/")) {
     return new NextResponse("Not found", { status: 404 });
   }
 

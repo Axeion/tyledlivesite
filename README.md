@@ -96,6 +96,7 @@ See `.env.example` for the full list with comments. The important ones:
 | `DNS_RESOLVER` | Optional `host:port` resolver override for domain verification (mock DNS in tests). |
 | `DOMAIN_VERIFY_INTERVAL_SECONDS` | Worker interval for DNS checks (default 60). |
 | `PLATFORM_IPS` | Optional comma-separated public IPs of the platform; when set, apex custom domains are told to create A records and verification checks them. |
+| `SMTP_URL`, `MAIL_FROM`, `ADMIN_NOTIFY_EMAILS` | Optional email delivery; without `SMTP_URL` mail is logged. |
 | `SEED_*` | Credentials created by `prisma db seed`. |
 | `ACME_EMAIL` | Let's Encrypt contact for Caddy (compose). |
 
@@ -207,14 +208,15 @@ Dashboard → Custom domain (paid plan only):
    when `PLATFORM_IPS` is set, otherwise ALIAS/CNAME-flattening advice).
 2. `scripts/worker.ts` checks every `DOMAIN_VERIFY_INTERVAL_SECONDS` (also on
    "Check now"). A domain is `VERIFIED` when the TXT token matches **and** the name
-   routes to the platform. Verified domains that lose their records are marked
-   `FAILED` and stop serving; transient resolver errors are ignored.
+   routes to the platform. A verified domain that has clearly lost its records on
+   three consecutive checks is marked `FAILED` and stops serving; resolver errors
+   (timeouts, SERVFAIL) never count against it.
 3. Caddy's catch-all `https://` site uses `tls { on_demand }` with
    `on_demand_tls { ask http://web:3000/api/internal/tls/ask }`. The ask endpoint
    returns 200 only for the apex, existing lodge subdomains and `VERIFIED` custom
    domains whose lodge currently holds the custom-domain entitlement; otherwise 403
-   and Caddy never obtains a certificate. The endpoint is only reachable inside the
-   compose network.
+   and Caddy never obtains a certificate. The Caddyfile answers 404 for
+   `/api/internal/*` from the outside, so only Caddy itself can reach it.
 
 ## Local HTTPS testing
 
@@ -254,6 +256,14 @@ Add records to the mock DNS with
   key). The worker geocodes addresses through Nominatim with a persistent cache
   (`GeocodeCache`) and a 1 req/s limiter; results land in `lodge.lat/lng`.
 
+## Email notifications
+
+`lib/mailer.ts` sends plain-text mail when a lodge is submitted (to the submitter and
+to `ADMIN_NOTIFY_EMAILS`), approved or rejected (to the lodge's admins). With
+`SMTP_URL` unset the messages are printed to the server log, which is what the
+sandbox verification used; set `SMTP_URL=smtp://user:pass@host:587` and `MAIL_FROM`
+to deliver them.
+
 ## Security notes
 
 - Tenant isolation lives in the data layer (`lib/tenant-db.ts`), not the UI.
@@ -262,7 +272,9 @@ Add records to the mock DNS with
   plain fields are stripped of tags/control characters.
 - Uploads: max 5 MB, type detected from magic bytes (PNG/JPEG/WebP only; SVG is
   rejected), random object keys under `lodges/{lodgeId}/…`.
-- Signup rate limit: 5 per IP per hour; `X-Forwarded-For` only trusted with `TRUST_PROXY=1`.
+- Rate limits (DB-backed, so they hold across replicas): 5 signups per IP per hour;
+  failed logins locked after 10 per email or 30 per IP within 15 minutes.
+  `X-Forwarded-For` is only trusted with `TRUST_PROXY=1`.
 - Sessions: httpOnly, SameSite=Lax, Secure in production, host-scoped, 30 days;
   one-time login tokens expire after 5 minutes.
 - Stripe webhooks are signature-verified and idempotent.
@@ -270,6 +282,9 @@ Add records to the mock DNS with
   internal network; it only answers yes/no).
 
 ## Tests
+
+`.github/workflows/ci.yml` runs typecheck, lint, the unit suite (against a Postgres
+service) and a production build on every push.
 
 ```bash
 npm run typecheck && npm run lint

@@ -215,6 +215,9 @@ model Domain {
   hostname          String       @unique
   verificationToken String
   status            DomainStatus @default(PENDING)
+  // Consecutive failed checks since the last success; a VERIFIED domain is only
+  // downgraded after several, so a flaky resolver never takes a site offline.
+  failureCount      Int          @default(0)
   lastCheckedAt     DateTime?
   verifiedAt        DateTime?
   lastError         String?
@@ -240,12 +243,13 @@ model GeocodeCache {
   fetchedAt   DateTime @default(now())
 }
 
-model SignupAttempt {
+// Sliding-window rate limit hits, keyed like "signup:203.0.113.5" or "login:user@example.org".
+model RateLimitHit {
   id        String   @id @default(cuid())
-  ip        String
+  key       String
   createdAt DateTime @default(now())
 
-  @@index([ip, createdAt])
+  @@index([key, createdAt])
 }
 
 model StripeEvent {

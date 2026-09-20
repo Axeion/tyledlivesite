@@ -23,15 +23,14 @@ export async function addDomain(lodgeId: string, input: string): Promise<Domain>
   return db.domain.create({ data: { lodgeId, hostname, verificationToken: randomToken(16) } });
 }
 
+/** Consecutive failed checks before a VERIFIED domain is taken out of service. */
+export const DOWNGRADE_AFTER_FAILURES = 3;
+
 /** Re-checks one domain and persists the result. */
 export async function checkDomain(domain: Domain, dns?: DnsLookup): Promise<Domain> {
   const lodge = await db.lodge.findUniqueOrThrow({ where: { id: domain.lodgeId } });
   const result = await verifyDomain(domain.hostname, lodge.slug, domain.verificationToken, dns);
   const now = new Date();
-  const status = result.ok ? "VERIFIED" : domain.status === "VERIFIED" ? "VERIFIED" : "PENDING";
-  // A previously verified domain that stops resolving is downgraded after the
-  // worker sees it fail; a single transient failure keeps VERIFIED.
-  const downgraded = domain.status === "VERIFIED" && !result.ok && !result.error;
   const error = result.ok
     ? null
     : result.error ??
@@ -40,13 +39,29 @@ export async function checkDomain(domain: Domain, dns?: DnsLookup): Promise<Doma
         : !result.txtOk
           ? "TXT verification record not found"
           : "CNAME/A record does not point to the platform");
+
+  if (result.ok) {
+    return db.domain.update({
+      where: { id: domain.id },
+      data: { status: "VERIFIED", failureCount: 0, lastCheckedAt: now, verifiedAt: domain.verifiedAt ?? now, lastError: null },
+    });
+  }
+
+  // Resolver errors (timeouts, SERVFAIL) are not evidence the records are gone.
+  const definiteFailure = !result.error;
+  const failureCount = definiteFailure ? domain.failureCount + 1 : domain.failureCount;
+  // A verified domain keeps serving until it has clearly lost its records
+  // several checks in a row; then it is marked FAILED and stops resolving.
+  const downgrade = domain.status === "VERIFIED" && failureCount >= DOWNGRADE_AFTER_FAILURES;
+  const status = domain.status === "VERIFIED" ? (downgrade ? "FAILED" : "VERIFIED") : domain.status === "FAILED" ? "FAILED" : "PENDING";
   return db.domain.update({
     where: { id: domain.id },
     data: {
-      status: downgraded ? "FAILED" : status,
+      status,
+      failureCount,
       lastCheckedAt: now,
-      verifiedAt: result.ok ? (domain.verifiedAt ?? now) : downgraded ? null : domain.verifiedAt,
-      lastError: error,
+      verifiedAt: downgrade ? null : domain.verifiedAt,
+      lastError: status === "VERIFIED" ? `Last check failed (${failureCount}/${DOWNGRADE_AFTER_FAILURES}): ${error}` : error,
     },
   });
 }

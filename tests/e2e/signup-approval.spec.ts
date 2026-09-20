@@ -9,7 +9,7 @@ test.describe.serial("signup, approval and publish", () => {
   test.beforeAll(async () => {
     await sql('DELETE FROM "Lodge" WHERE slug = $1', [SLUG]);
     await sql('DELETE FROM "User" WHERE email = $1', [EMAIL]);
-    await sql('DELETE FROM "SignupAttempt"');
+    await sql('DELETE FROM "RateLimitHit"');
   });
 
   test("a lodge can sign up through the wizard and lands on its pending dashboard", async ({ page }) => {
