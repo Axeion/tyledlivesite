@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionButton, ActionForm } from "@/components/ActionForm";
 import { approveLodge, rejectLodge, setLodgePublished } from "@/lib/actions/admin";
@@ -34,6 +35,9 @@ export default async function AdminLodgeDetail({ params }: { params: Promise<{ i
           </p>
         </div>
         <div className="flex flex-col items-end gap-3">
+          <Link href={`/admin/lodges/${lodge.id}/edit`} className="btn-primary" data-testid="edit-site">
+            Edit site
+          </Link>
           {lodge.status !== "APPROVED" ? (
             <ActionButton action={approveLodge} label="Approve & publish" className="btn-primary" hidden={{ lodgeId: lodge.id }} />
           ) : (

@@ -1,10 +1,13 @@
 "use server";
 
-import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { changeUserPassword } from "@/lib/auth/account";
 import { createLoginToken } from "@/lib/auth/login-token";
 import { verifyPassword } from "@/lib/auth/password";
-import { createSession, destroySession } from "@/lib/auth/session";
+import { createSession, destroySession, getCurrentUser, SESSION_COOKIE } from "@/lib/auth/session";
+import { sha256 } from "@/lib/auth/tokens";
 import { getDashboardLodge } from "@/lib/dashboard";
 import { db } from "@/lib/db";
 import { getClientIp, isLoginBlocked, recordFailedLogin } from "@/lib/rate-limit";
@@ -84,4 +87,43 @@ export async function logout(): Promise<void> {
 export async function logoutFromDashboard(): Promise<void> {
   await destroySession();
   redirect("/dashboard/login");
+}
+
+/**
+ * Password change for whoever is signed in on this host: lodge members on
+ * their dashboard, platform admins on /admin. A wrong current password counts
+ * against the same lockout as a failed sign-in, so a stolen session cannot be
+ * used to guess the password at leisure.
+ */
+export async function changePassword(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Sign in to change your password" };
+  const ip = getClientIp(await headers());
+  if (await isLoginBlocked(ip, user.email)) return { error: LOCKED };
+
+  const raw = (await cookies()).get(SESSION_COOKIE)?.value;
+  const result = await changeUserPassword(
+    user,
+    {
+      currentPassword: formString(formData, "currentPassword") ?? "",
+      newPassword: formString(formData, "newPassword") ?? "",
+      confirmPassword: formString(formData, "confirmPassword") ?? "",
+    },
+    { keepSessionId: raw ? sha256(raw) : undefined },
+  );
+  if (!result.ok) {
+    if (result.badCurrent) {
+      const limit = await recordFailedLogin(ip, user.email);
+      if (!limit.allowed) return { error: LOCKED };
+    }
+    return { error: result.error };
+  }
+  revalidatePath("/dashboard/account");
+  revalidatePath("/admin/account");
+  return {
+    ok:
+      result.revokedSessions > 0
+        ? `Password changed. ${result.revokedSessions} other signed-in ${result.revokedSessions === 1 ? "device was" : "devices were"} signed out.`
+        : "Password changed.",
+  };
 }

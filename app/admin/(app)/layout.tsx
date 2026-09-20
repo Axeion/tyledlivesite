@@ -25,7 +25,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             </Link>
           </nav>
           <form action={logout} className="flex items-center gap-3 text-sm">
-            <span className="text-neutral-500">{admin.email}</span>
+            <Link href="/admin/account" className="text-neutral-500 hover:text-indigo-600">
+              {admin.email}
+            </Link>
             <button className="btn-secondary" type="submit">
               Sign out
             </button>

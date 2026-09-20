@@ -134,6 +134,14 @@ subdomain with a one-time token.
 **Roles.** `platformRole = PLATFORM_ADMIN` on a user; `LodgeMembership.role` is
 `ADMIN` or `EDITOR`. Editors manage content, officers, events, pages and photos.
 Admins additionally manage template, custom domain, billing, members and publishing.
+Anyone signed in changes their own password under **Account** (`/dashboard/account`,
+`/admin/account`); doing so revokes every other session for that user.
+
+**Platform admin edits.** `/admin/lodges/{id}/edit` lets the platform admin change
+any lodge's information, logo/seal and template on the lodge's behalf, through the
+same validation as the dashboard. The admin may set a template above the lodge's
+plan. Each save is audited with `by: "platform-admin"` so the lodge can tell it from
+its own activity.
 
 **Templates.** `templates/registry.ts` lists `classic`, `modern` and `minimal`
 (all `tier: "free"`). Every template renders the same `LodgeSiteData`, so switching
@@ -273,7 +281,9 @@ to deliver them.
 - Uploads: max 5 MB, type detected from magic bytes (PNG/JPEG/WebP only; SVG is
   rejected), random object keys under `lodges/{lodgeId}/…`.
 - Rate limits (DB-backed, so they hold across replicas): 5 signups per IP per hour;
-  failed logins locked after 10 per email or 30 per IP within 15 minutes.
+  failed logins locked after 10 per email or 30 per IP within 15 minutes. A wrong
+  current password on the change-password form counts as a failed login, so a
+  stolen session cannot be used to guess the password.
   `X-Forwarded-For` is only trusted with `TRUST_PROXY=1`.
 - Sessions: httpOnly, SameSite=Lax, Secure in production, host-scoped, 30 days;
   one-time login tokens expire after 5 minutes.

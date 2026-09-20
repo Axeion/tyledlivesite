@@ -17,6 +17,7 @@ const NAV: { href: string; label: string; admin?: boolean }[] = [
   { href: "/dashboard/domain", label: "Custom domain", admin: true },
   { href: "/dashboard/billing", label: "Billing", admin: true },
   { href: "/dashboard/members", label: "Members", admin: true },
+  { href: "/dashboard/account", label: "Account" },
 ];
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {

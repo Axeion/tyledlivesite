@@ -2,17 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { z } from "zod";
+import { fail, fromForm } from "@/lib/actions/shared";
 import { hashPassword } from "@/lib/auth/password";
 import { createCheckoutSession, createPortalSession } from "@/lib/billing/stripe";
 import { audit, requireDashboard } from "@/lib/dashboard";
 import { db } from "@/lib/db";
-import { DomainValidationError, normalizeHostname } from "@/lib/domains/instructions";
+import { normalizeHostname } from "@/lib/domains/instructions";
 import { addDomain as addDomainService, checkDomain } from "@/lib/domains/service";
 import { canUseCustomDomain, canUseTemplate } from "@/lib/entitlements";
-import { RecurrenceError, parseRRule } from "@/lib/events/recurrence";
+import { parseRRule } from "@/lib/events/recurrence";
 import { fromFloating } from "@/lib/events/timezone";
-import { deleteObject, newObjectKey, putObject, UploadValidationError, validateImageUpload } from "@/lib/storage";
+import { applyLodgeInfo, LODGE_INFO_KEYS } from "@/lib/lodge-info";
+import { deleteObject, newObjectKey, putObject, validateImageUpload } from "@/lib/storage";
 import { lodgeSubdomainUrl } from "@/lib/urls";
 import {
   emailSchema,
@@ -23,49 +24,21 @@ import {
   officerSchema,
   pageSchema,
   passwordSchema,
-  zodMessage,
 } from "@/lib/validation";
 import { getTemplate, isTemplateId } from "@/templates/registry";
 import type { ActionResult } from "@/components/ActionForm";
 
 type Result = Promise<ActionResult>;
 
-function fail(err: unknown): ActionResult {
-  if (err instanceof z.ZodError) return { error: zodMessage(err) };
-  if (err instanceof DomainValidationError || err instanceof UploadValidationError || err instanceof RecurrenceError) {
-    return { error: err.message };
-  }
-  if (err && typeof err === "object" && "digest" in err) throw err; // Next redirect/notFound
-  console.error(err);
-  return { error: "Something went wrong. Please try again." };
-}
-
-function fromForm(fd: FormData, keys: string[]): Record<string, string | undefined> {
-  const out: Record<string, string | undefined> = {};
-  for (const k of keys) out[k] = formString(fd, k);
-  return out;
-}
-
 // ---------------------------------------------------------------------------
 // Lodge info & images
 // ---------------------------------------------------------------------------
 
-const LODGE_INFO_KEYS = [
-  "name", "number", "jurisdiction", "tagline", "about", "meetingSchedule", "contactEmail", "contactPhone", "website",
-  "addressLine1", "addressLine2", "city", "region", "postalCode", "country", "timezone",
-];
-
 export async function updateLodgeInfo(_prev: ActionResult, fd: FormData): Result {
   try {
     const ctx = await requireDashboard("EDITOR");
-    const data = lodgeInfoSchema.parse(fromForm(fd, LODGE_INFO_KEYS));
-    const addressChanged = ["addressLine1", "addressLine2", "city", "region", "postalCode", "country"].some(
-      (k) => (ctx.lodge as unknown as Record<string, unknown>)[k] !== data[k as keyof typeof data],
-    );
-    await ctx.db.lodge.update({
-      where: { id: ctx.lodge.id },
-      data: { ...data, ...(addressChanged ? { lat: null, lng: null, geocodedAt: null } : {}) },
-    });
+    const { data, addressChanged } = applyLodgeInfo(ctx.lodge, lodgeInfoSchema.parse(fromForm(fd, LODGE_INFO_KEYS)));
+    await ctx.db.lodge.update({ where: { id: ctx.lodge.id }, data });
     await audit(ctx, "lodge.info_updated");
     revalidatePath("/dashboard");
     return { ok: addressChanged ? "Saved. The map will update once the new address is located." : "Saved." };
