@@ -49,6 +49,8 @@ export interface LodgeSiteData {
   };
   /** True when rendered inside the dashboard preview (shows a banner). */
   preview: boolean;
+  /** True when rendered small and non-interactive, as a template thumbnail. */
+  thumbnail?: boolean;
 }
 
 export type SitePage =

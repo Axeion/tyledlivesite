@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { logoutFromDashboard } from "@/lib/actions/auth";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { requireDashboard } from "@/lib/dashboard";
 import { lodgeSubdomainUrl } from "@/lib/urls";
 
@@ -24,8 +25,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { lodge, user, membership } = await requireDashboard("EDITOR", { redirect: true });
   const isAdmin = membership.role === "ADMIN";
   return (
-    <div className="min-h-screen bg-neutral-50">
-      <header className="border-b border-neutral-200 bg-white">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
+      <header className="border-b border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div>
             <p className="text-xs uppercase tracking-widest text-neutral-500">Dashboard</p>
@@ -45,6 +46,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 Sign out
               </button>
             </form>
+            <ThemeToggle />
           </div>
         </div>
       </header>
@@ -53,7 +55,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <ul className="space-y-1 text-sm">
             {NAV.filter((n) => !n.admin || isAdmin).map((n) => (
               <li key={n.href}>
-                <Link href={n.href} className="block rounded px-3 py-1.5 hover:bg-white hover:shadow-sm">
+                <Link href={n.href} className="block rounded px-3 py-1.5 hover:bg-white hover:shadow-sm dark:hover:bg-neutral-800">
                   {n.label}
                 </Link>
               </li>

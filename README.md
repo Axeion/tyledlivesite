@@ -149,6 +149,27 @@ changes only `lodge.templateId`. `canUseTemplate()` rejects `premium` templates
 unless the plan grants them; the signup wizard, template page and server action all
 go through it.
 
+Each template's palette is a set of CSS custom properties on
+`[data-template="<id>"]` in `app/globals.css` rather than colours in its class
+names, so a theme's colours live in one place and dark mode is a second set of
+values under `.dark`. A per-lodge palette would only have to override the same
+tokens.
+
+**Template previews.** The picker renders each template with the lodge's own
+content (`components/TemplateThumbnail.tsx`): the template is rendered at desktop
+width, scaled down, and made `inert`. Thumbnails set `thumbnail: true` on the site
+data, which suppresses the live map — three Leaflet instances in a picker is both
+slow and pointless at that size.
+
+**Dark mode.** A `dark` class on `<html>` drives it, not `prefers-color-scheme`
+alone, so the sun/moon toggle in the header can override the operating system.
+The choice lives in the host-scoped `tyled_theme` cookie and is read in the root
+layout, so the server sends the right theme in the first response and there is no
+flash; a small inline script covers the remaining case of "no cookie yet, OS
+prefers dark". With no cookie the site follows the OS. The toggle decides which
+icon to show in CSS rather than from React state, so it is correct before
+hydration.
+
 ## Flows: signup, approval, publish
 
 1. `/signup`: account → template (premium ones disabled) → lodge details (name,

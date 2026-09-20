@@ -35,13 +35,13 @@ export default async function PreviewPage({ searchParams }: { searchParams: Prom
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="font-medium">Preview:</span>
         {PAGES.map((p) => (
-          <Link key={p.key} href={`/dashboard/preview?page=${p.key}`} className={`rounded px-2 py-1 ${p.key === selected.key ? "bg-indigo-600 text-white" : "bg-white"}`}>
+          <Link key={p.key} href={`/dashboard/preview?page=${p.key}`} className={`rounded px-2 py-1 ${p.key === selected.key ? "bg-indigo-600 text-white" : "bg-white dark:bg-neutral-800"}`}>
             {p.label}
           </Link>
         ))}
-        <span className="text-neutral-500">· template {template.name}</span>
+        <span className="text-neutral-500 dark:text-neutral-400">· template {template.name}</span>
       </div>
-      <div className="overflow-hidden rounded-lg border border-neutral-300 bg-white" data-testid="preview-frame">
+      <div className="overflow-hidden rounded-lg border border-neutral-300 bg-white dark:border-neutral-700 dark:bg-neutral-900" data-testid="preview-frame">
         <template.Component data={data} page={selected.page} />
       </div>
     </div>

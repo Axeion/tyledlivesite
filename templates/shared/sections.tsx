@@ -65,7 +65,7 @@ export function MonthCalendar({ data, kit, grid }: { data: LodgeSiteData; kit: T
       </div>
       <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-current/10 bg-current/10 text-xs">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-          <div key={d} className="bg-white/80 px-2 py-1 text-center font-semibold uppercase tracking-wide">
+          <div key={d} className="bg-[var(--t-surface)] px-2 py-1 text-center font-semibold uppercase tracking-wide">
             {d}
           </div>
         ))}
@@ -122,6 +122,8 @@ export function Gallery({ data, kit }: { data: LodgeSiteData; kit: ThemeKit }) {
 
 export function ContactBlock({ data, kit, showMap = true }: { data: LodgeSiteData; kit: ThemeKit; showMap?: boolean }) {
   const l = data.lodge;
+  // A thumbnail is a static picture of the theme; never mount a live map in one.
+  const withMap = showMap && !data.thumbnail;
   return (
     <div className="grid gap-8 md:grid-cols-2">
       <div className="space-y-4">
@@ -170,9 +172,9 @@ export function ContactBlock({ data, kit, showMap = true }: { data: LodgeSiteDat
           </div>
         ) : null}
       </div>
-      {showMap && l.lat !== null && l.lng !== null ? (
+      {withMap && l.lat !== null && l.lng !== null ? (
         <LodgeMap lat={l.lat} lng={l.lng} label={`${l.name} No. ${l.number}`} address={l.address.formatted} />
-      ) : showMap ? (
+      ) : withMap ? (
         <div className={`${kit.muted} rounded-lg border border-dashed border-current/30 p-6 text-sm`} data-testid="map-pending">
           Map will appear once the lodge address has been located.
         </div>
